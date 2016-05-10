@@ -1,0 +1,157 @@
+---
+title: "Main Body of Exercise"
+author: "Saeid Abolfazli"
+date: "May 9, 2016"
+output: pdf_document
+---
+
+How many parolees are contained in the dataset?
+
+
+```{r}
+parole <- read.table("data/parole.csv",sep=",", header=TRUE)
+str(parole)
+table(parole$violator)
+```
+
+How many of the parolees in the dataset violated the terms of their parole?
+
+You should be familiar with unordered factors (if not, review the Week 2 homework problem "Reading Test Scores"). Which variables in this dataset are unordered factors with at least three levels? Select all that apply.
+
+
+```{r}
+unique(parole$state)
+```
+
+In the last subproblem, we identified variables that are unordered factors with at least 3 levels, so we need to convert them to factors for our prediction problem (we introduced this idea in the "Reading Test Scores" problem last week). Using the as.factor() function, convert these variables to factors. Keep in mind that we are not changing the values, just the way R understands them (the values are still numbers).
+
+How does the output of summary() change for a factor variable as compared to a numerical variable?
+
+
+```{r}
+parole$state <- as.factor(parole$state)
+parole$crime <- as.factor(parole$crime)
+summary(parole$crime)
+table(parole$crime)
+```
+
+To ensure consistent training/testing set splits, run the following 5 lines of code (do not include the line numbers at the beginning):
+
+```{r}
+set.seed(144)
+library(lubripack)
+lubripack("caTools")
+index <- sample.split(parole$violator,0.7)
+paroleTrain <- parole[index,]
+paroleTest <- parole[!index,]
+```
+
+If you tested other training/testing set splits in the previous section, please re-run the original 5 lines of code to obtain the original split.
+
+Using glm (and remembering the parameter family="binomial"), train a logistic regression model on the training set. Your dependent variable is "violator", and you should use all of the other variables as independent variables.
+
+```{r}
+Model1 <- glm(violator~.,data=paroleTrain,family=binomial)
+summary(Model1)
+```
+
+Consider a parolee who is male, of white race, aged 50 years at prison release, from the state of Maryland, served 3 months, had a maximum sentence of 12 months, did not commit multiple offenses, and committed a larceny. Answer the following questions based on the model's predictions for this individual.
+
+According to the model, what are the odds this individual is a violator?
+
+```{r}
+Logit <-  -4.2411573912 + 0.3869904022 + 0.8867192411 - (50*0.0001756156) +  (0*0.4433006515) + (0*0.8349796539)  +(0*-3.3967877633) +(-0.1238867027  * 3)  +(12 * 0.0802953765) +(0 * 1.6119918595) +  0.6837143152   + (0 * -0.2781054228)+   (0 * -0.0117626521) 
+
+Odds <- exp(Logit)
+Odds
+```
+
+According to the model, what is the probability this individual is a violator?
+
+```{r}
+probability <- 1/(1+exp(-Logit))
+probability
+```
+
+Obtain the model's predicted probabilities for parolees in the testing set, remembering to pass type="response".
+
+What is the maximum predicted probability of a violation?
+
+```{r}
+predViolation <- predict(Model1,type="response",newdata = paroleTest)
+max(predViolation)
+```
+
+What is the model's sensitivity?
+
+```{r}
+table(paroleTest$violator ,as.numeric(predViolation >= 0.5))
+```
+
+**Answer:** 0.5217
+
+What is the model's specificity?
+
+**Answer:**0.933
+
+What is the model's accuracy?
+
+**Answer:** 0.886
+
+What is the accuracy of a simple model that predicts that every parolee is a non-violator?
+
+
+```{r}
+table(parole$violator)
+```
+
+**Answer** : 597/(597+78) = 0.88
+
+Consider a parole board using the model to predict whether parolees will be violators or not. The job of a parole board is to make sure that a prisoner is ready to be released into free society, and therefore parole boards tend to be particularily concerned about releasing prisoners who will violate their parole. Which of the following most likely describes their preferences and best course of action?
+
+* The board assigns more cost to a false negative than a false positive, and should therefore use a logistic regression cutoff higher than 0.5.  
+
+* The board assigns more cost to a false negative than a false positive, and should therefore use a logistic regression cutoff less than 0.5. 
+ 
+* The board assigns equal cost to a false positive and a false negative, and should therefore use a logistic regression cutoff equal to 0.5. 
+
+* The board assigns more cost to a false positive than a false negative, and should therefore use a logistic regression cutoff higher than 0.5. 
+
+* The board assigns more cost to a false positive than a false negative, and should therefore use a logistic regression cutoff less than 0.5.
+
+**Answer:** 2 
+
+Which of the following is the most accurate assessment of the value of the logistic regression model with a cutoff 0.5 to a parole board, based on the model's accuracy as compared to the simple baseline model?
+
+* The model is of limited value to the board because it cannot outperform a simple baseline, and using a different logistic regression cutoff is unlikely to improve the model's value. 
+
+* The model is of limited value to the board because it cannot outperform a simple baseline, and using a different logistic regression cutoff is likely to improve the model's value. 
+
+* The model is likely of value to the board, and using a different logistic regression cutoff is unlikely to improve the model's value. 
+
+* The model is likely of value to the board, and using a different logistic regression cutoff is likely to improve the model's value.
+
+Using the ROCR package, what is the AUC value for the model?
+
+```{r}
+lubripack("ROCR")
+ROCRPred <- prediction(predViolation, paroleTest$violator)
+perfMode <- performance(ROCRPred,"auc")@y.values[[1]]
+```
+
+Describe the meaning of AUC in this context.
+
+* The probability the model can correctly differentiate between a randomly selected parole violator and a randomly selected parole non-violator. 
+
+* The probability the model can correctly differentiate between a randomly selected parole violator and a randomly selected parole non-violator. - correct  The model's accuracy at logistic regression cutoff 0.5.  
+
+* The model's accuracy at the logistic regression cutoff at which it is most accurate.
+
+**Answer:** 1
+
+
+# Identifying Bias in Observational Data
+
+Our goal has been to predict the outcome of a parole decision, and we used a publicly available dataset of parole releases for predictions. In this final problem, we'll evaluate a potential source of bias associated with our analysis. It is always important to evaluate a dataset for possible sources of bias.
+
+The dataset contains all individuals released from parole in 2004, either due to completing their parole term or violating the terms of their parole. However, it does not contain parolees who neither violated their parole nor completed their term in 2004, causing non-violators to be underrepresented. This is called "selection bias" or "selecting on the dependent variable," because only a subset of all relevant parolees were included in our analysis, based on our dependent variable in this analysis (parole violation). How could we improve our dataset to best address selection bias?
